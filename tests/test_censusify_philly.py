@@ -8,7 +8,6 @@ from censusify_philly.census.models import (
 from censusify_philly.arcgis.census_geo_matcher import CensusGeoMatcher
 from censusify_philly.philly_geographies import (
     generate_demographics_df,
-    OpenDataPhillyGeographyName,
     CENSUS_BLOCK_GROUP_ARCGIS_QUERY_SOURCE,
     OPEN_DATA_PHILLY_ARCGIS_QUERY_SOURCES,
 )

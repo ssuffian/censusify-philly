@@ -95,4 +95,6 @@ if __name__ == "__main__":
         )
 
         Path("csvs").mkdir(parents=True, exist_ok=True)
-        df.to_csv(f"csvs/{local_geography_name}__{relationship_name}.csv")
+        df.sort_values("PSA_NUM").to_csv(
+            f"csvs/{local_geography_name}__{relationship_name}.csv"
+        )

@@ -1,18 +1,26 @@
 import httpx
+from pydantic import BaseModel
+
+
+class ArcgisQuerySource(BaseModel):
+    url: str
+    unique_geo_column: str
+    attribute_col_str: str = "*"
 
 
 class ArcgisQuery:
-    def __init__(self, base_url, attribute_col_str="*"):
-        self.base_url = base_url
+    def __init__(self, arcgis_query_source: ArcgisQuerySource):
+        self.source = arcgis_query_source
+        self.base_url = self.source.url
         self.initial_params = {
             "inSr": 4326,  # required to pass in lat/lngs
             "outSr": 4326,  # required to return data in lat/lng format
             "spatialRel": "esriSpatialRelWithin",
-            "outFields": attribute_col_str,
+            "outFields": self.source.attribute_col_str,
             "f": "json",
         }
 
-    async def get_by_lat_lng(self, /, *, lat, lng, include_geometry=False):
+    def get_by_lat_lng(self, /, *, lat, lng, include_geometry=False):
         params = self.initial_params.copy()
         params.update(
             {
@@ -21,9 +29,9 @@ class ArcgisQuery:
                 "returnGeometry": include_geometry,
             }
         )
-        return await self._get(params)
+        return self._get(params)
 
-    async def get_all_by_attribute(self, /, *, where_str, include_geometry=True):
+    def get_all_by_attribute(self, where_str, /, *, include_geometry=True):
         params = self.initial_params.copy()
         params.update(
             {
@@ -32,21 +40,21 @@ class ArcgisQuery:
                 "returnGeometry": include_geometry,
             }
         )
-        return await self._list(params)
+        return self._list(params)
 
-    async def _request(self, params):
-        async with httpx.AsyncClient(timeout=30) as client:
-            return await client.get(self.base_url, params=params)
+    def _request(self, params):
+        with httpx.Client(timeout=30) as client:
+            return client.get(self.base_url, params=params)
 
-    async def _get(self, params):
-        response = await self._request(params=params)
+    def _get(self, params):
+        response = self._request(params=params)
         result = response.json()["features"][0]
         return ArcgisResult(
             attributes=result["attributes"], geometry=result.get("geometry")
         )
 
-    async def _list(self, params):
-        response = await self._request(params=params)
+    def _list(self, params):
+        response = self._request(params=params)
         results = response.json()["features"]
         return [
             ArcgisResult(

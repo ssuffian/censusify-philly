@@ -10,9 +10,7 @@ from censusify_philly.arcgis.arcgis_query import (
     ArcgisQuery,
     ArcgisQuerySource,
 )
-from censusify_philly.census.models import (
-    CensusDataQuery,
-)
+from censusify_philly.census.models import CensusDataQuery, CensusDemographicsResult
 
 
 class OpenDataPhillyGeographyName(str, Enum):
@@ -57,6 +55,60 @@ STATE_FIPS = "42"  # Pennsylvania
 COUNTY_FIPS = "101"  # Philadelphia County
 
 
+class PoliceDataCensusDemographicsResult(CensusDemographicsResult):
+    american_indian: int
+    asian: int
+    unknown: int
+    white_latino: int
+    white_nonlatino: int
+    black_latino: int
+    black_nonlatino: int
+    total: int
+
+    @classmethod
+    def from_renamed_result(cls, renamed_results):
+        american_indian = renamed_results[
+            "p1_005n_american_indian_and_alaska_native_alone"
+        ]
+        asian = renamed_results["p1_006n_asian_alone"]
+        pacific_islander = renamed_results[
+            "p1_007n_native_hawaiian_and_other_pacific_islander_alone"
+        ]
+        other = renamed_results["p1_008n_some_other_race_alone"]
+        multiracial = renamed_results["p1_009n_multiracial:"]
+
+        white = renamed_results["p1_003n_white_alone"]
+        white_nonlatino = renamed_results[
+            "p2_005n_not_hispanic_or_latino:!!white_alone"
+        ]
+        white_latino = white - white_nonlatino
+
+        black = renamed_results["p1_004n_black_or_african_american_alone"]
+        black_nonlatino = renamed_results[
+            "p2_006n_not_hispanic_or_latino:!!black_or_african_american_alone"
+        ]
+        black_latino = black - black_nonlatino
+        total = renamed_results["p1_001n_!!total:"]
+
+        """
+        # white is anyone who is exclusively white
+        white = white_non_latino
+        # latino is anyone who is latino other than black-latino
+        latino = latino - black_latino
+        black = black
+        """
+        return cls(
+            american_indian=american_indian,
+            asian=asian + pacific_islander,
+            unknown=other + multiracial,
+            black_latino=black_latino,
+            black_nonlatino=black_nonlatino,
+            white_latino=white_latino,
+            white_nonlatino=white_nonlatino,
+            total=total,
+        )
+
+
 def generate_demographics_df(
     *,
     census_data_query: CensusDataQuery,
@@ -66,7 +118,9 @@ def generate_demographics_df(
 ):
 
     census_demographics_df = census_data_query.get_all_demographic_data_for_county(
-        state_fips=STATE_FIPS, county_fips=COUNTY_FIPS
+        state_fips=STATE_FIPS,
+        county_fips=COUNTY_FIPS,
+        CensusDemographicsResultClass=PoliceDataCensusDemographicsResult,
     )
     matcher = CensusGeoMatcher(
         census_arcgis_query=census_arcgis_query, other_arcgis_query=other_arcgis_query

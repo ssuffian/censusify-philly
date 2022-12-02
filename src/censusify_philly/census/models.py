@@ -9,6 +9,54 @@ from pydantic import root_validator
 from typing import Any
 
 
+class CensusDemographicsResult(BaseModel):
+    @root_validator
+    def check_numbers_equal_total(cls, values: dict[str, Any]) -> dict[str, Any]:
+        total_check = sum([values[key] for key in values.keys() if key != "total"])
+        total = values["total"]
+        if total_check != total:
+            raise ValueError(
+                f"There should be {total} people but demographics add up to {total_check}"
+            )
+        return values
+
+    @classmethod
+    def from_renamed_result(cls, renamed_results):
+        raise NotImplementedError
+
+
+class SeparateCategoriesCensusDemographicsResult(CensusDemographicsResult):
+    american_indian: int
+    asian: int
+    unknown: int
+    white: int
+    black_or_african_american: int
+    hispanic_or_latino: int
+    total: int
+
+    @classmethod
+    def from_renamed_result(cls, renamed_results):
+        return cls(
+            american_indian=renamed_results[
+                "p2_007n_not_hispanic_or_latino:!!american_indian_and_alaska_native_alone"
+            ],
+            asian=renamed_results["p2_008n_not_hispanic_or_latino:!!asian_alone"]
+            + renamed_results[
+                "p2_009n_not_hispanic_or_latino:!!native_hawaiian_and_other_pacific_islander_alone"
+            ],
+            unknown=renamed_results[
+                "p2_010n_not_hispanic_or_latino:!!some_other_race_alone"
+            ]
+            + renamed_results["p2_011n_not_hispanic_or_latino:!!multiracial:"],
+            white=renamed_results["p2_005n_not_hispanic_or_latino:!!white_alone"],
+            black_or_african_american=renamed_results[
+                "p2_006n_not_hispanic_or_latino:!!black_or_african_american_alone"
+            ],
+            hispanic_or_latino=renamed_results["p2_002n_hispanic_or_latino"],
+            total=renamed_results["p1_001n_!!total:"],
+        )
+
+
 class CensusDataQuery:
     def __init__(self, census: Census):
         self.census = census
@@ -33,15 +81,24 @@ class CensusDataQuery:
             geography_col = geo_results.unique_geo_column
             result[geography_col] = geography_name
             results.append(result)
-        return pd.DataFrame(results).set_index(geography_col)
+        return pd.DataFrame(results).sort_values(geography_col).set_index(geography_col)
 
-    def get_all_demographic_data_for_county(self, state_fips, county_fips):
+    def get_all_demographic_data_for_county(
+        self,
+        /,
+        *,
+        state_fips,
+        county_fips,
+        CensusDemographicsResultClass: CensusDemographicsResult = SeparateCategoriesCensusDemographicsResult,
+    ):
         census_demographic_results = self._get_demographic_data(
             state_fips=state_fips, county_fips=county_fips, tract="*", blockgroup="*"
         )
         return CensusBlockGroupDemographicsCollection(
             demographics=[
-                CensusBlockGroupDemographics.from_census_data(result)
+                CensusBlockGroupDemographics.from_census_data(
+                    CensusDemographicsResultClass, result
+                )
                 for result in census_demographic_results
             ]
         ).to_df()
@@ -62,26 +119,6 @@ class CensusDataQuery:
             tract=tract,
             blockgroup=blockgroup,
         )
-
-
-class CensusDemographicsResult(BaseModel):
-    american_indian: int
-    asian: int
-    unknown: int
-    white: int
-    black_or_african_american: int
-    hispanic_or_latino: int
-    total: int
-
-    @root_validator
-    def check_numbers_equal_total(cls, values: dict[str, Any]) -> dict[str, Any]:
-        total_check = sum([values[key] for key in values.keys() if key != "total"])
-        total = values["total"]
-        if total_check != total:
-            raise ValueError(
-                f"There should be {total} people but demographics add up to {total_check}"
-            )
-        return values
 
 
 class CensusBlockGroupDemographics(BaseModel):
@@ -132,35 +169,19 @@ class CensusBlockGroupDemographics(BaseModel):
 
         return {_rename_key(k): v for k, v in single_geography_demographics.items()}
 
-    @staticmethod
-    def simplify_census_demographics_columns(renamed_results: dict[str, Any]):
-        return CensusDemographicsResult(
-            american_indian=renamed_results[
-                "p2_007n_not_hispanic_or_latino:!!american_indian_and_alaska_native_alone"
-            ],
-            asian=renamed_results["p2_008n_not_hispanic_or_latino:!!asian_alone"]
-            + renamed_results[
-                "p2_009n_not_hispanic_or_latino:!!native_hawaiian_and_other_pacific_islander_alone"
-            ],
-            unknown=renamed_results[
-                "p2_010n_not_hispanic_or_latino:!!some_other_race_alone"
-            ]
-            + renamed_results["p2_011n_not_hispanic_or_latino:!!multiracial:"],
-            white=renamed_results["p2_005n_not_hispanic_or_latino:!!white_alone"],
-            black_or_african_american=renamed_results[
-                "p2_006n_not_hispanic_or_latino:!!black_or_african_american_alone"
-            ],
-            hispanic_or_latino=renamed_results["p2_002n_hispanic_or_latino"],
-            total=renamed_results["p1_001n_!!total:"],
-        )
-
     def as_flat_dict(self):
         return {"geoid": self.geoid, **self.result.dict()}
 
     @classmethod
-    def from_census_data(cls, result):
+    def from_census_data(
+        cls,
+        CensusDemographicsResultClass: CensusDemographicsResult,
+        result: dict[str, Any],
+    ):
         renamed_result = cls.rename_census_demographics_columns(result)
-        simplified_result = cls.simplify_census_demographics_columns(renamed_result)
+        simplified_result = CensusDemographicsResultClass.from_renamed_result(
+            renamed_result
+        )
         return cls(
             name=result["NAME"],
             state_fips=result["state"],

@@ -30,7 +30,6 @@ if __name__ == "__main__":
             census_data_query=CensusDataQuery(census=census_api),
             relationship=relationship,
         )
-
         Path("csvs").mkdir(parents=True, exist_ok=True)
         df.sort_values("PSA_NUM").to_csv(
             f"csvs/{local_geography_name}__{relationship_name}.csv"

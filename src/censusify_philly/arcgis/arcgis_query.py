@@ -31,6 +31,11 @@ class ArcgisQuery:
         )
         return self._get(params)
 
+    def get_raw_geojson(self):
+        params = self.initial_params.copy()
+        response = self._request(params=params)
+        return response.json()
+
     def get_all_by_attribute(self, where_str, /, *, include_geometry=True):
         params = self.initial_params.copy()
         params.update(

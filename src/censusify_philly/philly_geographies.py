@@ -90,13 +90,6 @@ class PoliceDataCensusDemographicsResult(CensusDemographicsResult):
         black_latino = black - black_nonlatino
         total = renamed_results["p1_001n_!!total:"]
 
-        """
-        # white is anyone who is exclusively white
-        white = white_non_latino
-        # latino is anyone who is latino other than black-latino
-        latino = latino - black_latino
-        black = black
-        """
         return cls(
             american_indian=american_indian,
             asian=asian + pacific_islander,

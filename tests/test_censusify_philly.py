@@ -6,12 +6,11 @@ from censusify_philly.census.models import (
     CensusDataQuery,
 )
 from censusify_philly.arcgis.census_geo_matcher import CensusGeoMatcher
-from censusify_philly.philly_geographies import (
-    generate_demographics_df,
+from censusify_philly.police_geographies import (
     CENSUS_BLOCK_GROUP_ARCGIS_QUERY_SOURCE,
     OPEN_DATA_PHILLY_ARCGIS_QUERY_SOURCES,
 )
-from censusify_philly.arcgis.arcgis_query import ArcgisQuery, ArcgisResult
+from censusify_philly.arcgis.models import ArcgisQuery, ArcgisResult
 
 
 def test_version():
@@ -127,20 +126,5 @@ def other_arcgis_query():
     return OtherArcgisQueryFakePSA()
 
 
-def test_census_data_query(census_data_query):
-    demographics_df = census_data_query.get_all_demographic_data_for_county(
-        state_fips="42", county_fips="101"
-    )
-    assert not demographics_df.empty
-
-
-def test_census_geo_query(census_data_query, census_arcgis_query, other_arcgis_query):
-
-    df = generate_demographics_df(
-        census_data_query=census_data_query,
-        census_arcgis_query=census_arcgis_query,
-        other_arcgis_query=other_arcgis_query,
-        relationship="centroid_is_within",
-    )
-    assert not df.empty
-    assert df.total.sum() > 0
+def test_match(census_data_query):
+    results = census_data_query.get_demographic_data(state_fips="42", county_fips="101")

@@ -3,7 +3,9 @@ name = "censusify-philly"
 version = "0.1.0"
 description = ""
 authors = ["Stephen Suffian <stephen.suffian@pm.me>"]
-packages= [{include="services"}]
+
+[tool.poetry.scripts]
+philly-police = "censusify_philly.police_geographies:cli"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -12,6 +14,8 @@ Shapely = "^1.8.4"
 pandas = "^1.5.0"
 httpx = "^0.23.0"
 pydantic = "^1.10.2"
+black = {extras = ["jupyter"], version = "^23.7.0"}
+pandera = "^0.16.1"
 
 [tool.poetry.dev-dependencies]
 jupyterlab = "^3.5.0"

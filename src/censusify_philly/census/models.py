@@ -21,99 +21,25 @@ class CensusDemographicsResult(BaseModel):
         return values
 
     @classmethod
-    def from_renamed_result(cls, renamed_results):
+    def from_raw_census_data(cls, results):
         raise NotImplementedError
 
-
-class SeparateCategoriesCensusDemographicsResult(CensusDemographicsResult):
-    american_indian: int
-    asian: int
-    unknown: int
-    white: int
-    black_or_african_american: int
-    hispanic_or_latino: int
-    total: int
-
-    @classmethod
-    def from_renamed_result(cls, renamed_results):
-        return cls(
-            american_indian=renamed_results[
-                "p2_007n_not_hispanic_or_latino:!!american_indian_and_alaska_native_alone"
-            ],
-            asian=renamed_results["p2_008n_not_hispanic_or_latino:!!asian_alone"]
-            + renamed_results[
-                "p2_009n_not_hispanic_or_latino:!!native_hawaiian_and_other_pacific_islander_alone"
-            ],
-            unknown=renamed_results[
-                "p2_010n_not_hispanic_or_latino:!!some_other_race_alone"
-            ]
-            + renamed_results["p2_011n_not_hispanic_or_latino:!!multiracial:"],
-            white=renamed_results["p2_005n_not_hispanic_or_latino:!!white_alone"],
-            black_or_african_american=renamed_results[
-                "p2_006n_not_hispanic_or_latino:!!black_or_african_american_alone"
-            ],
-            hispanic_or_latino=renamed_results["p2_002n_hispanic_or_latino"],
-            total=renamed_results["p1_001n_!!total:"],
-        )
+    @staticmethod
+    def as_df(results):
+        raise NotImplementedError
 
 
 class CensusDataQuery:
     def __init__(self, census: Census):
         self.census = census
 
-    def assign_demographic_data_to_custom_geographies(
-        self, geo_results: dict[str, Any], census_demographics_df: pd.DataFrame
+    def get_demographic_data(
+        self, state_fips: str, county_fips: str, tract: str = "*", blockgroup: str = "*"
     ):
-
-        results = []
-        for (
-            geography_name,
-            census_block_group_overlap_weights,
-        ) in geo_results.results.items():
-            census_weighting_series = pd.Series(census_block_group_overlap_weights)
-            result = (
-                census_demographics_df.loc[census_weighting_series.index]
-                .mul(census_weighting_series, axis=0)
-                .sum()
-                .round()
-                .to_dict()
-            )
-            geography_col = geo_results.unique_geo_column
-            result[geography_col] = geography_name
-            results.append(result)
-        return pd.DataFrame(results).sort_values(geography_col).set_index(geography_col)
-
-    def get_all_demographic_data_for_county(
-        self,
-        /,
-        *,
-        state_fips,
-        county_fips,
-        CensusDemographicsResultClass: CensusDemographicsResult = SeparateCategoriesCensusDemographicsResult,
-    ):
-        census_demographic_results = self._get_demographic_data(
-            state_fips=state_fips, county_fips=county_fips, tract="*", blockgroup="*"
-        )
-        return CensusBlockGroupDemographicsCollection(
-            demographics=[
-                CensusBlockGroupDemographics.from_census_data(
-                    CensusDemographicsResultClass, result
-                )
-                for result in census_demographic_results
-            ]
-        ).to_df()
-
-    def _get_demographic_data(self, state_fips, county_fips, tract, blockgroup):
-        totals_cols = ["P1_001N"]
-        race_cols = [f"P1_00{i}N" for i in range(3, 10)]
-        hispanic_cols = ["P2_002N", "P2_003N"]
-        race_hispanic_cols = [f"P2_0{i:02}N" for i in range(4, 12)]
+        race_cols = [f"P1_00{i}N" for i in range(1, 10)]
+        race_hispanic_cols = [f"P2_0{i:02}N" for i in range(1, 12)]
         return self.census.pl.state_county_blockgroup(
-            fields=["NAME"]
-            + race_hispanic_cols
-            + race_cols
-            + hispanic_cols
-            + totals_cols,
+            fields=["NAME"] + race_hispanic_cols + race_cols,
             state_fips=state_fips,
             county_fips=county_fips,
             tract=tract,
@@ -152,6 +78,7 @@ class CensusBlockGroupDemographics(BaseModel):
                     .replace("Population of one race:!!", "")
                     .replace("Population of two or more races", "Multiracial")
                     .strip()
+                    .rstrip(":")
                 )
             elif key in variable_hispanic_mapping.keys():
                 output = (
@@ -162,6 +89,7 @@ class CensusBlockGroupDemographics(BaseModel):
                     .replace("Population of one race:!!", "")
                     .replace("Population of two or more races", "Multiracial")
                     .strip()
+                    .rstrip(":")
                 )
             else:
                 output = key
@@ -178,7 +106,9 @@ class CensusBlockGroupDemographics(BaseModel):
         CensusDemographicsResultClass: CensusDemographicsResult,
         result: dict[str, Any],
     ):
+        # Converts the columns to names with underscores and that include description
         renamed_result = cls.rename_census_demographics_columns(result)
+        # Further simplifies the names
         simplified_result = CensusDemographicsResultClass.from_renamed_result(
             renamed_result
         )

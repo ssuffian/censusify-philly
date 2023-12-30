@@ -6,4 +6,4 @@ An explanatory notebook is [here](https://github.com/ssuffian/censusify-philly/b
 
 You can also run `generate_csvs.py` to re-generate the CSVs.
 
-If you just want the demographics by PSA, you can download [by % area overlap](https://github.com/ssuffian/censusify-philly/blob/main/csvs/police_service_area__pct_overlap.csv) or [by census block group centroid](https://github.com/ssuffian/censusify-philly/blob/main/csvs/police_service_area__centroid_is_within.csv).
+If you just want the demographics by PSA, you can download [by census block group centroid](https://github.com/ssuffian/censusify-philly/blob/main/csvs/police_service_area.csv).

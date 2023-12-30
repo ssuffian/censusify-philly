@@ -1,4 +1,4 @@
-from censusify_philly.arcgis.arcgis_query import (
+from censusify_philly.arcgis.models import (
     ArcgisQuery,
 )
 from pydantic import BaseModel
@@ -31,6 +31,28 @@ class CensusGeoMatcher:
     ) -> dict[str, Any]:
         where_str = f"STATE='{state_fips}' AND COUNTY='{county_fips}'"
         return self.census_arcgis.get_all_by_attribute(where_str)
+
+    def assign_demographic_data_to_custom_geographies(
+        self, geo_results: dict[str, Any], census_demographics_df: pd.DataFrame
+    ):
+
+        results = []
+        for (
+            geography_name,
+            census_block_group_overlap_weights,
+        ) in geo_results.results.items():
+            census_weighting_series = pd.Series(census_block_group_overlap_weights)
+            result = (
+                census_demographics_df.loc[census_weighting_series.index]
+                .mul(census_weighting_series, axis=0)
+                .sum()
+                .round()
+                .to_dict()
+            )
+            geography_col = geo_results.unique_geo_column
+            result[geography_col] = geography_name
+            results.append(result)
+        return pd.DataFrame(results).sort_values(geography_col).set_index(geography_col)
 
     def get_census_block_group_overlap_between_given_features(
         self,
